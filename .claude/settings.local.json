@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(npm run:*)",
+      "Bash(node:*)",
+      "Bash(node -e \":*)",
+      "Bash(cd:*)",
+      "Bash(curl -s \"https://iqpphktbetazspqrvqmi.supabase.co/rest/v1/quotations?select=reference_price_total&limit=1\" -H \"apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlxZ3BwaGt0YmV0YXpzcHFydnFtaSIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzQyMjgyNjMxLCJleHAiOjIwNTc4NTg2MzF9.5HC-SJVB7WPCjYWA9zPF1o1S5q8nGg7fH3F6kZT0QgU\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlxZ3BwaGt0YmV0YXpzcHFydnFtaSIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzQyMjgyNjMxLCJleHAiOjIwNTc4NTg2MzF9.5HC-SJVB7WPCjYWA9zPF1o1S5q8nGg7fH3F6kZT0QgU\")",
+      "Bash(npx supabase:*)",
+      "Bash(/tmp/check_approved_itinerary.sql:*)",
+      "Bash(curl -s \"https://sgaetrzukdcfzxhystoe.supabase.co/rest/v1/project_financial_suppliers?select=*&limit=1\" -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNnYWV0cnp1a2RjZnp4aHlzdG9lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM2NTEyMzQsImV4cCI6MjA1OTIyNzIzNH0.J6z3BG9sTJGJ8Z5J5U5X5Y5Z5a5b5c5d5e5f5g5h5i5j\")",
+      "Bash(npx tsc:*)",
+      "Bash(sed:*)",
+      "Bash(psql:*)",
+      "Bash(findstr \"project\")",
+      "Bash(Select-String \"project\")",
+      "Bash(Select-String \"supabase\")",
+      "Bash(npm install:*)",
+      "Bash(mkdir -p public)",
+      "Bash(cp node_modules/pdfjs-dist/build/pdf.worker.min.js public/)",
+      "Bash(cp node_modules/pdfjs-dist/build/pdf.worker.min.mjs public/pdf.worker.min.js)",
+      "Bash(powershell:*)",
+      "Bash(python3:*)",
+      "Bash(grep:*)",
+      "Bash(xxd)",
+      "Bash(sed -i \"s/BD 经理/客户经理/g\" Customers.tsx)",
+      "Bash(sed -i \"s/BD 总监/CEO/g\" Customers.tsx)",
+      "Read(//d D:/杭州傲杭/系统开发/菁英/jingying0331/src/**)",
+      "Bash(xxd Customers.tsx)",
+      "Bash(npm list:*)"
+    ]
+  }
+}
