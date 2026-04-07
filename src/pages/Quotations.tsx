@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { supabase } from '../lib/supabase';
-import { DashScope } from '../lib/qwen';
+import { DashScope, askDataAssistant } from '../lib/qwen';
 import Markdown from 'react-markdown';
 import html2pdf from 'html2pdf.js';
 import { useAppStore } from '../store';
@@ -485,24 +485,19 @@ export default function Quotations() {
         .replace('{hotelContext}', hotelContext)
         .replace('{scheduleContext}', scheduleContext);
 
-      const apiKey = (import.meta as any).env.VITE_DASHSCOPE_API_KEY || process.env.DASHSCOPE_API_KEY;
-      if (!apiKey) throw new Error('未配置 DashScope API Key');
-
-      const ai = new DashScope({ apiKey });
+      const ai = new DashScope();
       const response = await ai.call({
-        model: 'qwen3.5-plus',
-        input: {
-          messages: [
-            {
-              role: 'system',
-              content: '你是一个专业的游学/培训项目产品经理。'
-            },
-            {
-              role: 'user',
-              content: prompt
-            }
-          ]
-        }
+        model: 'qwen-plus',
+        messages: [
+          {
+            role: 'system',
+            content: '你是一个专业的游学/培训项目产品经理。'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ]
       });
 
       if (response.output?.text) {
