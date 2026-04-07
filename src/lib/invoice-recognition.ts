@@ -17,7 +17,7 @@ export interface InvoiceRecognitionConfig {
  * 请在阿里云百炼控制台获取 API Key: https://bailian.console.aliyun.com/
  */
 export const INVOICE_RECOGNITION_CONFIG: InvoiceRecognitionConfig = {
-  apiEndpoint: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', // 直接调用阿里云 API
+  apiEndpoint: '/api/qwen', // 使用 Vercel Serverless 代理
   model: 'qwen2.5-vl-plus', // Qwen2.5-VL 系列，性价比高
 };
 
@@ -25,11 +25,8 @@ export const INVOICE_RECOGNITION_CONFIG: InvoiceRecognitionConfig = {
  * 从环境变量获取 API Key
  */
 function getApiKey(): string {
-  const apiKey = (import.meta as any).env.VITE_QWEN_VL_API_KEY;
-  if (!apiKey) {
-    throw new Error('请先在 Vercel 环境变量中配置 VITE_QWEN_VL_API_KEY');
-  }
-  return apiKey;
+  // API Key 现在由后端代理管理，前端不需要
+  return 'server-side';
 }
 
 /**
@@ -53,26 +50,31 @@ export async function recognizeInvoiceNumber(imageUrl: string): Promise<string> 
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
+        action: 'invoice',
         model: config.model,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'image_url',
-                image_url: imageUrl,
-              },
-              {
-                type: 'text',
-                text: '请识别这张发票的发票号码。发票号通常是 8-20 位的数字或字母组合，位于发票的右上角或显著位置。请直接返回发票号码本身，不要包含任何其他文字、标点或说明。如果没有找到发票号码，请返回"未找到"。',
-              },
-            ],
-          },
-        ],
-        max_tokens: 50,
+        input: {
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'image_url',
+                  image_url: imageUrl,
+                },
+                {
+                  type: 'text',
+                  text: '请识别这张发票的发票号码。发票号通常是 8-20 位的数字或字母组合，位于发票的右上角或显著位置。请直接返回发票号码本身，不要包含任何其他文字、标点或说明。如果没有找到发票号码，请返回"未找到"。',
+                },
+              ],
+            },
+          ],
+        },
+        parameters: {
+          temperature: 0.1,
+          max_tokens: 50,
+        },
       }),
       signal: controller.signal,
     });

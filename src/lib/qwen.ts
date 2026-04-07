@@ -1,6 +1,6 @@
 /**
- * 阿里云百炼 DashScope SDK（简化版）
- * 使用原生 fetch 调用 Qwen API
+ * 阿里云百炼 DashScope SDK（通过 Vercel Serverless 代理）
+ * API Key 由服务器端管理，不会暴露
  */
 
 export interface DashScopeConfig {
@@ -8,12 +8,7 @@ export interface DashScopeConfig {
 }
 
 export class DashScope {
-  private apiKey: string;
-  private baseUrl = 'https://dashscope.aliyuncs.com/compatible-mode/v1';
-
-  constructor(config: DashScopeConfig) {
-    this.apiKey = config.apiKey;
-  }
+  private baseUrl = '/api/qwen'; // 使用后端代理
 
   async call(options: {
     model: string;
@@ -21,11 +16,10 @@ export class DashScope {
       messages: Array<{ role: string; content: string }>;
     };
   }) {
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
+    const response = await fetch(this.baseUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify({
         model: options.model,
@@ -47,7 +41,7 @@ export class DashScope {
   }
 }
 
-const ai = new DashScope({ apiKey: (import.meta as any).env.VITE_DASHSCOPE_API_KEY || '' });
+const ai = new DashScope({ apiKey: 'server-side' });
 
 export async function askDataAssistant(question: string, context: any) {
   try {
