@@ -1,7 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // 只允许 POST 请求
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -11,36 +10,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'API Key not configured' });
   }
 
-  const { action, model, input, messages, parameters, ...body } = req.body;
+  const { model, messages, ...body } = req.body;
 
   try {
-    // 发票识别使用不同的 endpoint
-    const isInvoice = action === 'invoice';
-    const endpoint = isInvoice
-      ? 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation'
-      : 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
-
-    // 构建请求体
-    const requestBody = isInvoice
-      ? {
-          model,
-          input: input || { messages },
-          parameters: parameters || {},
-        }
-      : {
-          model,
-          messages,
-          ...body,
-        };
-
-    const response = await fetch(endpoint, {
+    const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
-        'X-DashScope-SSE': 'disable',
       },
-      body: JSON.stringify(requestBody),
+      body: JSON.stringify({
+        model: model || 'qwen-plus',
+        messages,
+        ...body,
+      }),
     });
 
     const data = await response.json();
