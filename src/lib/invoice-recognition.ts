@@ -17,7 +17,7 @@ export interface InvoiceRecognitionConfig {
  * 请在阿里云百炼控制台获取 API Key: https://bailian.console.aliyun.com/
  */
 export const INVOICE_RECOGNITION_CONFIG: InvoiceRecognitionConfig = {
-  apiEndpoint: '/api/qwen/api/v1/services/aigc/multimodal-generation/generation', // 使用 Vite 代理
+  apiEndpoint: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', // 直接调用阿里云 API
   model: 'qwen2.5-vl-plus', // Qwen2.5-VL 系列，性价比高
 };
 
@@ -25,9 +25,9 @@ export const INVOICE_RECOGNITION_CONFIG: InvoiceRecognitionConfig = {
  * 从环境变量获取 API Key
  */
 function getApiKey(): string {
-  const apiKey = process.env.QWEN_VL_API_KEY;
-  if (!apiKey || apiKey === 'YOUR_ALIYUN_API_KEY_HERE') {
-    throw new Error('请先在 .env.local 文件中配置 QWEN_VL_API_KEY');
+  const apiKey = (import.meta as any).env.VITE_QWEN_VL_API_KEY;
+  if (!apiKey) {
+    throw new Error('请先在 Vercel 环境变量中配置 VITE_QWEN_VL_API_KEY');
   }
   return apiKey;
 }
@@ -63,7 +63,7 @@ export async function recognizeInvoiceNumber(imageUrl: string): Promise<string> 
             content: [
               {
                 type: 'image_url',
-                image_url: { url: imageUrl },
+                image_url: imageUrl,
               },
               {
                 type: 'text',
@@ -72,10 +72,7 @@ export async function recognizeInvoiceNumber(imageUrl: string): Promise<string> 
             ],
           },
         ],
-        parameters: {
-          temperature: 0.1,
-          max_tokens: 50,
-        },
+        max_tokens: 50,
       }),
       signal: controller.signal,
     });
