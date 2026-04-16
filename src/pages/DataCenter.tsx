@@ -387,7 +387,7 @@ export default function DataCenter() {
         customers: Record<string, number>;
       }> = {};
 
-      // 按员工统计（项目经理销售金额）
+      // 按员工统计（项目经理销售金额）- 所有状态都计入
       const salesStats: Record<string, number> = {};
       // 按员工统计（提成金额）
       const commissionStats: Record<string, { service: number; product: number }> = {};
@@ -397,7 +397,7 @@ export default function DataCenter() {
         const income = Number(p.income_with_tax || 0);
         const customerId = p.customer_id;
 
-        // 客户统计
+        // 客户统计（所有项目都计入）
         if (customerId) {
           if (!customerStats[customerId]) {
             customerStats[customerId] = { projectCount: 0, totalRevenue: 0, totalCost: 0, projects: [], supplierCost: {} };
@@ -407,8 +407,8 @@ export default function DataCenter() {
           customerStats[customerId].projects.push(p.name);
         }
 
-        // 销售统计（项目经理）
-        if (p.bd_manager_id && p.status === '已通过') {
+        // 销售统计（项目经理）- 只要有关联项目经理和收入就统计，不限制状态
+        if (p.bd_manager_id && income > 0) {
           salesStats[p.bd_manager_id] = (salesStats[p.bd_manager_id] || 0) + income;
         }
 
@@ -478,6 +478,16 @@ export default function DataCenter() {
           reimbursementStats[customerId].byCategory[r.category] = (reimbursementStats[customerId].byCategory[r.category] || 0) + amount;
         }
       });
+
+      // ============ 调试日志 ============
+      console.log('[AI Debug] 项目总数:', (allProjects || []).length);
+      console.log('[AI Debug] 项目原始数据:', JSON.stringify(allProjects?.slice(0, 3), null, 2));
+      console.log('[AI Debug] 有客户 ID 的项目数:', (allProjects || []).filter(p => p.customer_id).length);
+      console.log('[AI Debug] 有收入的项目数:', (allProjects || []).filter(p => Number(p.income_with_tax || 0) > 0).length);
+      console.log('[AI Debug] 有 bd_manager 的项目数:', (allProjects || []).filter(p => p.bd_manager_id).length);
+      console.log('[AI Debug] 销售统计结果:', salesStats);
+      console.log('[AI Debug] 客户统计结果:', customerStats);
+      console.log('[AI Debug] 员工列表:', users?.map(u => ({ id: u.id, name: u.name, role: u.role })));
 
       // 项目状态统计
       const statusStats: Record<string, number> = {};

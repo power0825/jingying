@@ -28,7 +28,9 @@
       "Bash(sed -i \"s/BD 总监/CEO/g\" Customers.tsx)",
       "Read(//d D:/杭州傲杭/系统开发/菁英/jingying0331/src/**)",
       "Bash(xxd Customers.tsx)",
-      "Bash(npm list:*)"
+      "Bash(npm list:*)",
+      "Bash(curl -s https://api.vercel.com/v6/deployments?projectId=YOUR_PROJECT_ID)",
+      "WebFetch(domain:jingying.vercel.app)"
     ]
   }
 }
