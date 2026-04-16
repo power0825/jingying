@@ -306,109 +306,176 @@ export default function DataCenter() {
     setIsAiLoading(true);
 
     try {
-      // 构建丰富的上下文数据
+      // ============ 获取基础数据 ============
+      // 1. 项目数据（包含收入、成本、提成信息）
       const { data: allProjects } = await supabase.from('projects').select(`
-        id,
-        code,
-        name,
-        customer_id,
-        client_name,
-        participants,
-        execution_days,
-        income_with_tax,
-        estimated_cost,
-        status,
-        bd_manager_id,
-        class_teacher_id,
-        created_at
+        id, code, name, customer_id, client_name, participants, execution_days,
+        income_with_tax, income_without_tax, estimated_cost,
+        service_commission_rate, product_commission_rate,
+        service_commission_paid, product_commission_paid,
+        status, bd_manager_id, class_teacher_id, created_at
       `);
 
-      // 获取客户列表
+      // 2. 项目执行数据（包含实际提成金额）
+      const { data: projectExecutions } = await supabase
+        .from('project_executions')
+        .select('project_id, service_commission, product_commission');
+
+      // 3. 客户列表
       const { data: customers } = await supabase.from('customers').select('id, name, code, customer_type');
 
-      // 获取供应商列表
+      // 4. 供应商列表
       const { data: suppliers } = await supabase.from('suppliers').select('id, name, type');
 
-      // 获取员工列表
+      // 5. 员工列表
       const { data: users } = await supabase.from('users').select('id, name, role');
 
-      // 获取项目财务数据（客户回款）
+      // 6. 客户回款明细
       const { data: customerPayments } = await supabase
         .from('project_financial_customers')
         .select('project_id, customer_id, amount, payment_status');
 
-      // 获取项目财务数据（供应商付款）
+      // 7. 供应商付款明细
       const { data: supplierPayments } = await supabase
         .from('project_financial_suppliers')
         .select('project_id, supplier_id, amount, actual_amount, payment_status');
 
-      // 构建项目名称映射
-      const projectMap = new Map();
-      (allProjects || []).forEach(p => {
-        const customer = (customers || []).find(c => c.id === p.customer_id);
-        projectMap.set(p.id, {
-          ...p,
-          customer_name: customer?.name || p.client_name || '未知客户',
-        });
-      });
+      // 8. 报销数据
+      const { data: reimbursements } = await supabase
+        .from('project_reimbursements')
+        .select('project_id, category, amount, status');
 
-      // 构建客户名称映射
+      // ============ 构建映射 ============
+      // 构建客户映射
       const customerMap = new Map();
       (customers || []).forEach(c => customerMap.set(c.id, c.name));
 
-      // 构建供应商名称映射
+      // 构建供应商映射
       const supplierMap = new Map();
       (suppliers || []).forEach(s => supplierMap.set(s.id, s.name));
 
-      // 构建员工名称映射
+      // 构建员工映射
       const userMap = new Map();
       (users || []).forEach(u => userMap.set(u.id, u.name));
 
-      // 按客户统计项目数据
-      const customerStats: Record<string, { projectCount: number; totalRevenue: number; projects: string[] }> = {};
+      // 构建项目执行映射（按项目 ID 聚合提成）
+      const executionMap = new Map();
+      (projectExecutions || []).forEach(e => {
+        const existing = executionMap.get(e.project_id) || { service: 0, product: 0 };
+        executionMap.set(e.project_id, {
+          service: existing.service + Number(e.service_commission || 0),
+          product: existing.product + Number(e.product_commission || 0),
+        });
+      });
+
+      // ============ 统计数据 ============
+      // 按客户统计
+      const customerStats: Record<string, {
+        projectCount: number;
+        totalRevenue: number;
+        totalCost: number;
+        projects: string[];
+        supplierCost: Record<string, number>;
+      }> = {};
+
+      // 按供应商统计
+      const supplierStats: Record<string, {
+        totalCost: number;
+        totalActual: number;
+        projectCount: number;
+        projects: Record<string, number>;
+        customers: Record<string, number>;
+      }> = {};
+
+      // 按员工统计（项目经理销售金额）
+      const salesStats: Record<string, number> = {};
+      // 按员工统计（提成金额）
+      const commissionStats: Record<string, { service: number; product: number }> = {};
+
+      // 处理每个项目
       (allProjects || []).forEach(p => {
-        if (p.customer_id) {
-          if (!customerStats[p.customer_id]) {
-            customerStats[p.customer_id] = { projectCount: 0, totalRevenue: 0, projects: [] };
+        const income = Number(p.income_with_tax || 0);
+        const customerId = p.customer_id;
+
+        // 客户统计
+        if (customerId) {
+          if (!customerStats[customerId]) {
+            customerStats[customerId] = { projectCount: 0, totalRevenue: 0, totalCost: 0, projects: [], supplierCost: {} };
           }
-          customerStats[p.customer_id].projectCount += 1;
-          customerStats[p.customer_id].totalRevenue += Number(p.income_with_tax || 0);
-          customerStats[p.customer_id].projects.push(p.name);
+          customerStats[customerId].projectCount += 1;
+          customerStats[customerId].totalRevenue += income;
+          customerStats[customerId].projects.push(p.name);
+        }
+
+        // 销售统计（项目经理）
+        if (p.bd_manager_id && p.status === '已通过') {
+          salesStats[p.bd_manager_id] = (salesStats[p.bd_manager_id] || 0) + income;
+        }
+
+        // 提成统计
+        const exec = executionMap.get(p.id);
+        if (exec) {
+          // 服务提成给项目经理
+          if (p.bd_manager_id && exec.service > 0) {
+            if (!commissionStats[p.bd_manager_id]) {
+              commissionStats[p.bd_manager_id] = { service: 0, product: 0 };
+            }
+            commissionStats[p.bd_manager_id].service += exec.service;
+          }
+          // 商品提成给班主任
+          if (p.class_teacher_id && exec.product > 0) {
+            if (!commissionStats[p.class_teacher_id]) {
+              commissionStats[p.class_teacher_id] = { service: 0, product: 0 };
+            }
+            commissionStats[p.class_teacher_id].product += exec.product;
+          }
         }
       });
 
-      // 按供应商统计成本数据
-      const supplierCostStats: Record<string, { totalCost: number; totalActual: number; projectCount: number; projects: Record<string, number> }> = {};
+      // 供应商付款统计
       (supplierPayments || []).forEach(p => {
-        if (p.supplier_id) {
-          if (!supplierCostStats[p.supplier_id]) {
-            supplierCostStats[p.supplier_id] = { totalCost: 0, totalActual: 0, projectCount: 0, projects: {} };
-          }
-          supplierCostStats[p.supplier_id].totalCost += Number(p.amount || 0);
-          supplierCostStats[p.supplier_id].totalActual += Number(p.actual_amount || 0);
-          supplierCostStats[p.supplier_id].projectCount += 1;
+        const actualAmount = Number(p.actual_amount || 0);
+        const supplierId = p.supplier_id;
+        const project = (allProjects || []).find(proj => proj.id === p.project_id);
+        const customerId = project?.customer_id;
 
-          // 按项目统计供应商成本
-          const projectName = projectMap.get(p.project_id)?.name || '未知项目';
-          if (!supplierCostStats[p.supplier_id].projects[projectName]) {
-            supplierCostStats[p.supplier_id].projects[projectName] = 0;
+        if (supplierId) {
+          if (!supplierStats[supplierId]) {
+            supplierStats[supplierId] = { totalCost: 0, totalActual: 0, projectCount: 0, projects: {}, customers: {} };
           }
-          supplierCostStats[p.supplier_id].projects[projectName] += Number(p.actual_amount || 0);
+          supplierStats[supplierId].totalCost += Number(p.amount || 0);
+          supplierStats[supplierId].totalActual += actualAmount;
+          supplierStats[supplierId].projectCount += 1;
+
+          // 按项目统计
+          const projectName = project?.name || '未知项目';
+          supplierStats[supplierId].projects[projectName] = (supplierStats[supplierId].projects[projectName] || 0) + actualAmount;
+
+          // 按客户统计
+          if (customerId) {
+            supplierStats[supplierId].customers[customerId] = (supplierStats[supplierId].customers[customerId] || 0) + actualAmount;
+
+            // 客户 - 供应商成本关联
+            if (customerStats[customerId]) {
+              customerStats[customerId].supplierCost[supplierId] = (customerStats[customerId].supplierCost[supplierId] || 0) + actualAmount;
+              customerStats[customerId].totalCost += actualAmount;
+            }
+          }
         }
       });
 
-      // 按客户统计供应商成本（用于回答"供应商 A 的成本在客户 S 的所有成本里面的占比"这类问题）
-      const customerSupplierCost: Record<string, Record<string, number>> = {};
-      (supplierPayments || []).forEach(p => {
-        const project = projectMap.get(p.project_id);
-        if (project && project.customer_id && p.supplier_id) {
-          if (!customerSupplierCost[project.customer_id]) {
-            customerSupplierCost[project.customer_id] = {};
+      // 报销统计
+      const reimbursementStats: Record<string, { total: number; byCategory: Record<string, number> }> = {};
+      (reimbursements || []).forEach(r => {
+        const project = (allProjects || []).find(p => p.id === r.project_id);
+        const customerId = project?.customer_id;
+        if (customerId) {
+          if (!reimbursementStats[customerId]) {
+            reimbursementStats[customerId] = { total: 0, byCategory: {} };
           }
-          if (!customerSupplierCost[project.customer_id][p.supplier_id]) {
-            customerSupplierCost[project.customer_id][p.supplier_id] = 0;
-          }
-          customerSupplierCost[project.customer_id][p.supplier_id] += Number(p.actual_amount || 0);
+          const amount = Number(r.amount || 0);
+          reimbursementStats[customerId].total += amount;
+          reimbursementStats[customerId].byCategory[r.category] = (reimbursementStats[customerId].byCategory[r.category] || 0) + amount;
         }
       });
 
@@ -418,29 +485,35 @@ export default function DataCenter() {
         statusStats[p.status] = (statusStats[p.status] || 0) + 1;
       });
 
-      // 格式化上下文数据
+      // ============ 构建上下文数据 ============
       const context = {
+        // 总体摘要
         summary: {
           totalProjects: (allProjects || []).length,
           totalCustomers: (customers || []).length,
           totalSuppliers: (suppliers || []).length,
           totalEmployees: (users || []).length,
           totalRevenue: (allProjects || []).reduce((sum, p) => sum + Number(p.income_with_tax || 0), 0),
-          totalCost: (supplierPayments || []).reduce((sum, p) => sum + Number(p.actual_amount || 0), 0),
+          totalCost: Object.values(supplierStats).reduce((sum, s) => sum + s.totalActual, 0),
           totalParticipants: (allProjects || []).reduce((sum, p) => sum + Number(p.participants || 0), 0),
+          totalCommission: Object.values(commissionStats).reduce((sum, c) => sum + c.service + c.product, 0),
         },
+        // 项目状态分布
         projectStatus: statusStats,
+        // 项目列表（精简版）
         projects: (allProjects || []).map(p => ({
           id: p.id,
           code: p.code,
           name: p.name,
-          customer_name: projectMap.get(p.id)?.customer_name,
-          income_with_tax: Number(p.income_with_tax || 0),
+          customer_name: customerMap.get(p.customer_id) || p.client_name || '未知客户',
+          income: Number(p.income_with_tax || 0),
           participants: p.participants,
           status: p.status,
-          bd_manager_name: userMap.get(p.bd_manager_id),
-          class_teacher_name: userMap.get(p.class_teacher_id),
+          bd_manager: userMap.get(p.bd_manager_id),
+          class_teacher: userMap.get(p.class_teacher_id),
+          commission: executionMap.get(p.id) || { service: 0, product: 0 },
         })),
+        // 客户列表（含统计数据）
         customers: (customers || []).map(c => ({
           id: c.id,
           name: c.name,
@@ -448,30 +521,52 @@ export default function DataCenter() {
           type: c.customer_type,
           projectCount: customerStats[c.id]?.projectCount || 0,
           totalRevenue: customerStats[c.id]?.totalRevenue || 0,
+          totalCost: customerStats[c.id]?.totalCost || 0,
+          profit: (customerStats[c.id]?.totalRevenue || 0) - (customerStats[c.id]?.totalCost || 0),
+          supplierBreakdown: Object.entries(customerStats[c.id]?.supplierCost || {}).map(([supplierId, cost]) => ({
+            supplier_name: supplierMap.get(supplierId) || '未知供应商',
+            cost,
+          })),
+          reimbursements: reimbursementStats[c.id]?.total || 0,
         })),
+        // 供应商列表（含统计数据）
         suppliers: (suppliers || []).map(s => ({
           id: s.id,
           name: s.name,
           type: s.type,
-          totalCost: supplierCostStats[s.id]?.totalCost || 0,
-          totalActual: supplierCostStats[s.id]?.totalActual || 0,
-          projectCount: supplierCostStats[s.id]?.projectCount || 0,
+          totalActual: supplierStats[s.id]?.totalActual || 0,
+          projectCount: supplierStats[s.id]?.projectCount || 0,
+          customerBreakdown: Object.entries(supplierStats[s.id]?.customers || {}).map(([customerId, cost]) => ({
+            customer_name: customerMap.get(customerId) || '未知客户',
+            cost,
+          })),
         })),
+        // 员工列表（含销售和提成统计）
         employees: (users || []).map(u => ({
           id: u.id,
           name: u.name,
           role: u.role,
+          salesAmount: salesStats[u.id] || 0,
+          commission: commissionStats[u.id] || { service: 0, product: 0 },
         })),
-        // 供应商按客户的成本分布（用于交叉问题）
-        customerSupplierCost: Object.entries(customerSupplierCost).map(([customerId, supplierData]) => ({
-          customer_id: customerId,
-          customer_name: customerMap.get(customerId) || '未知客户',
-          suppliers: Object.entries(supplierData).map(([supplierId, cost]) => ({
-            supplier_id: supplierId,
-            supplier_name: supplierMap.get(supplierId) || '未知供应商',
-            cost: cost,
-          })),
-        })),
+        // 数据字典（帮助 AI 理解字段含义）
+        dataDictionary: {
+          income_with_tax: '项目含税收入',
+          income_without_tax: '项目不含税收入',
+          estimated_cost: '预估成本',
+          service_commission_rate: '服务提成比例 (%)',
+          product_commission_rate: '商品提成比例 (%)',
+          service_commission: '服务提成金额',
+          product_commission: '商品提成金额',
+          actual_amount: '供应商实际结算金额',
+        },
+        // 计算说明
+        calculationGuide: {
+          '客户利润': '客户总收入 - 客户总成本（供应商结算 + 报销）',
+          '供应商在某客户的成本占比': '供应商在该客户的成本 / 该客户所有供应商成本之和 * 100%',
+          '项目利润率': '(项目收入 - 项目成本) / 项目收入 * 100%',
+          '销售提成': '服务提成 = 项目不含税收入 × 服务提成比例；商品提成来自商品销售',
+        },
       };
 
       const answer = await askDataAssistant(userMessage, context);
