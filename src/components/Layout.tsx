@@ -90,7 +90,12 @@ export default function Layout() {
               )}
             </div>
             {sidebarOpen && (
-              <button onClick={handleLogout} className="text-slate-400 hover:text-white ml-2 shrink-0" title="退出登录">
+              <button 
+                onClick={handleLogout} 
+                className="text-slate-400 hover:text-white ml-2 shrink-0 p-2 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer" 
+                title="退出登录"
+                type="button"
+              >
                 <LogOut className="h-5 w-5" />
               </button>
             )}

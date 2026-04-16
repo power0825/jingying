@@ -306,17 +306,179 @@ export default function DataCenter() {
     setIsAiLoading(true);
 
     try {
+      // 构建丰富的上下文数据
+      const { data: allProjects } = await supabase.from('projects').select(`
+        id,
+        code,
+        name,
+        customer_id,
+        client_name,
+        participants,
+        execution_days,
+        income_with_tax,
+        estimated_cost,
+        status,
+        bd_manager_id,
+        class_teacher_id,
+        created_at
+      `);
+
+      // 获取客户列表
+      const { data: customers } = await supabase.from('customers').select('id, name, code, customer_type');
+
+      // 获取供应商列表
+      const { data: suppliers } = await supabase.from('suppliers').select('id, name, type');
+
+      // 获取员工列表
+      const { data: users } = await supabase.from('users').select('id, name, role');
+
+      // 获取项目财务数据（客户回款）
+      const { data: customerPayments } = await supabase
+        .from('project_financial_customers')
+        .select('project_id, customer_id, amount, payment_status');
+
+      // 获取项目财务数据（供应商付款）
+      const { data: supplierPayments } = await supabase
+        .from('project_financial_suppliers')
+        .select('project_id, supplier_id, amount, actual_amount, payment_status');
+
+      // 构建项目名称映射
+      const projectMap = new Map();
+      (allProjects || []).forEach(p => {
+        const customer = (customers || []).find(c => c.id === p.customer_id);
+        projectMap.set(p.id, {
+          ...p,
+          customer_name: customer?.name || p.client_name || '未知客户',
+        });
+      });
+
+      // 构建客户名称映射
+      const customerMap = new Map();
+      (customers || []).forEach(c => customerMap.set(c.id, c.name));
+
+      // 构建供应商名称映射
+      const supplierMap = new Map();
+      (suppliers || []).forEach(s => supplierMap.set(s.id, s.name));
+
+      // 构建员工名称映射
+      const userMap = new Map();
+      (users || []).forEach(u => userMap.set(u.id, u.name));
+
+      // 按客户统计项目数据
+      const customerStats: Record<string, { projectCount: number; totalRevenue: number; projects: string[] }> = {};
+      (allProjects || []).forEach(p => {
+        if (p.customer_id) {
+          if (!customerStats[p.customer_id]) {
+            customerStats[p.customer_id] = { projectCount: 0, totalRevenue: 0, projects: [] };
+          }
+          customerStats[p.customer_id].projectCount += 1;
+          customerStats[p.customer_id].totalRevenue += Number(p.income_with_tax || 0);
+          customerStats[p.customer_id].projects.push(p.name);
+        }
+      });
+
+      // 按供应商统计成本数据
+      const supplierCostStats: Record<string, { totalCost: number; totalActual: number; projectCount: number; projects: Record<string, number> }> = {};
+      (supplierPayments || []).forEach(p => {
+        if (p.supplier_id) {
+          if (!supplierCostStats[p.supplier_id]) {
+            supplierCostStats[p.supplier_id] = { totalCost: 0, totalActual: 0, projectCount: 0, projects: {} };
+          }
+          supplierCostStats[p.supplier_id].totalCost += Number(p.amount || 0);
+          supplierCostStats[p.supplier_id].totalActual += Number(p.actual_amount || 0);
+          supplierCostStats[p.supplier_id].projectCount += 1;
+
+          // 按项目统计供应商成本
+          const projectName = projectMap.get(p.project_id)?.name || '未知项目';
+          if (!supplierCostStats[p.supplier_id].projects[projectName]) {
+            supplierCostStats[p.supplier_id].projects[projectName] = 0;
+          }
+          supplierCostStats[p.supplier_id].projects[projectName] += Number(p.actual_amount || 0);
+        }
+      });
+
+      // 按客户统计供应商成本（用于回答"供应商 A 的成本在客户 S 的所有成本里面的占比"这类问题）
+      const customerSupplierCost: Record<string, Record<string, number>> = {};
+      (supplierPayments || []).forEach(p => {
+        const project = projectMap.get(p.project_id);
+        if (project && project.customer_id && p.supplier_id) {
+          if (!customerSupplierCost[project.customer_id]) {
+            customerSupplierCost[project.customer_id] = {};
+          }
+          if (!customerSupplierCost[project.customer_id][p.supplier_id]) {
+            customerSupplierCost[project.customer_id][p.supplier_id] = 0;
+          }
+          customerSupplierCost[project.customer_id][p.supplier_id] += Number(p.actual_amount || 0);
+        }
+      });
+
+      // 项目状态统计
+      const statusStats: Record<string, number> = {};
+      (allProjects || []).forEach(p => {
+        statusStats[p.status] = (statusStats[p.status] || 0) + 1;
+      });
+
+      // 格式化上下文数据
       const context = {
-        projectData,
-        customerCount: customerData.length,
-        supplierCount: supplierData.length
+        summary: {
+          totalProjects: (allProjects || []).length,
+          totalCustomers: (customers || []).length,
+          totalSuppliers: (suppliers || []).length,
+          totalEmployees: (users || []).length,
+          totalRevenue: (allProjects || []).reduce((sum, p) => sum + Number(p.income_with_tax || 0), 0),
+          totalCost: (supplierPayments || []).reduce((sum, p) => sum + Number(p.actual_amount || 0), 0),
+          totalParticipants: (allProjects || []).reduce((sum, p) => sum + Number(p.participants || 0), 0),
+        },
+        projectStatus: statusStats,
+        projects: (allProjects || []).map(p => ({
+          id: p.id,
+          code: p.code,
+          name: p.name,
+          customer_name: projectMap.get(p.id)?.customer_name,
+          income_with_tax: Number(p.income_with_tax || 0),
+          participants: p.participants,
+          status: p.status,
+          bd_manager_name: userMap.get(p.bd_manager_id),
+          class_teacher_name: userMap.get(p.class_teacher_id),
+        })),
+        customers: (customers || []).map(c => ({
+          id: c.id,
+          name: c.name,
+          code: c.code,
+          type: c.customer_type,
+          projectCount: customerStats[c.id]?.projectCount || 0,
+          totalRevenue: customerStats[c.id]?.totalRevenue || 0,
+        })),
+        suppliers: (suppliers || []).map(s => ({
+          id: s.id,
+          name: s.name,
+          type: s.type,
+          totalCost: supplierCostStats[s.id]?.totalCost || 0,
+          totalActual: supplierCostStats[s.id]?.totalActual || 0,
+          projectCount: supplierCostStats[s.id]?.projectCount || 0,
+        })),
+        employees: (users || []).map(u => ({
+          id: u.id,
+          name: u.name,
+          role: u.role,
+        })),
+        // 供应商按客户的成本分布（用于交叉问题）
+        customerSupplierCost: Object.entries(customerSupplierCost).map(([customerId, supplierData]) => ({
+          customer_id: customerId,
+          customer_name: customerMap.get(customerId) || '未知客户',
+          suppliers: Object.entries(supplierData).map(([supplierId, cost]) => ({
+            supplier_id: supplierId,
+            supplier_name: supplierMap.get(supplierId) || '未知供应商',
+            cost: cost,
+          })),
+        })),
       };
 
       const answer = await askDataAssistant(userMessage, context);
       setAiMessages(prev => [...prev, { role: 'assistant', content: answer }]);
     } catch (err) {
       console.error('AI Error:', err);
-      setAiMessages(prev => [...prev, { role: 'assistant', content: '抱歉，处理您的问题时出错了。' }]);
+      setAiMessages(prev => [...prev, { role: 'assistant', content: '抱歉，处理您的问题时出错了：' + (err as any).message }]);
     } finally {
       setIsAiLoading(false);
     }
