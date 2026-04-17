@@ -305,6 +305,8 @@ export default function DataCenter() {
     setAiMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setIsAiLoading(true);
 
+    console.log('[AI Debug] 当前用户:', user);
+
     try {
       // ============ 获取基础数据 ============
       // 1. 项目数据（包含收入、成本、提成信息）
@@ -340,6 +342,19 @@ export default function DataCenter() {
       const { data: customerPayments } = await supabase
         .from('project_financial_customers')
         .select('project_id, customer_id, amount, payment_status');
+
+      // 7. 供应商付款明细
+      const { data: supplierPayments } = await supabase
+        .from('project_financial_suppliers')
+        .select('project_id, supplier_id, amount, actual_amount, payment_status');
+
+      // 8. 报销数据
+      const { data: reimbursements } = await supabase
+        .from('project_reimbursements')
+        .select('project_id, category, amount, status');
+
+      console.log('[AI Debug] 回款数据:', customerPayments);
+      console.log('[AI Debug] 项目关联客户情况:', (allProjects || []).filter(p => p.customer_id).length);
 
       // 7. 供应商付款明细
       const { data: supplierPayments } = await supabase
@@ -491,6 +506,30 @@ export default function DataCenter() {
         statusStats[p.status] = (statusStats[p.status] || 0) + 1;
       });
 
+      // ============ 计算回款数据 ============
+      // 按客户统计已收款金额
+      const customerReceivedMap = new Map();
+      (customerPayments || []).forEach(p => {
+        if (p.customer_id && p.payment_status === '已收款') {
+          const current = customerReceivedMap.get(p.customer_id) || 0;
+          customerReceivedMap.set(p.customer_id, current + Number(p.amount || 0));
+        }
+      });
+
+      // 按客户统计应收金额（从项目收入）
+      const customerReceivableMap = new Map();
+      (allProjects || []).forEach(p => {
+        if (p.customer_id) {
+          const current = customerReceivableMap.get(p.customer_id) || 0;
+          customerReceivableMap.set(p.customer_id, current + Number(p.income_with_tax || 0));
+        }
+      });
+
+      const totalReceivable = Array.from(customerReceivableMap.values()).reduce((sum, val) => sum + val, 0);
+      const totalReceived = Array.from(customerReceivedMap.values()).reduce((sum, val) => sum + val, 0);
+      // 未回款 = 所有项目的应收金额 - 已收款（如果项目数为 0，则未回款也为 0）
+      const totalUnreceived = (allProjects || []).length > 0 ? Math.max(0, totalReceivable - totalReceived) : 0;
+
       // ============ 构建上下文数据 ============
       // 计算回款数据
       const customerReceivedMap = new Map();
@@ -511,7 +550,7 @@ export default function DataCenter() {
           totalCustomers: (customers || []).length,
           totalSuppliers: (suppliers || []).length,
           totalEmployees: (users || []).length,
-          totalRevenue: (allProjects || []).reduce((sum, p) => sum + Number(p.income_with_tax || 0), 0),
+          totalRevenue: totalReceivable, // 使用应收金额作为总收入
           totalReceived: totalReceived,
           totalUnreceived: totalUnreceived,
           totalCost: Object.values(supplierStats).reduce((sum, s) => sum + s.totalActual, 0),
@@ -548,6 +587,9 @@ export default function DataCenter() {
             cost,
           })),
           reimbursements: reimbursementStats[c.id]?.total || 0,
+          receivableAmount: customerReceivableMap.get(c.id) || 0, // 应收金额
+          receivedAmount: customerReceivedMap.get(c.id) || 0, // 已收金额
+          unreceivedAmount: Math.max(0, (customerReceivableMap.get(c.id) || 0) - (customerReceivedMap.get(c.id) || 0)), // 未收金额
         })),
         // 供应商列表（含统计数据）
         suppliers: (suppliers || []).map(s => ({
@@ -586,7 +628,8 @@ export default function DataCenter() {
           '供应商在某客户的成本占比': '供应商在该客户的成本 / 该客户所有供应商成本之和 * 100%',
           '项目利润率': '(项目收入 - 项目成本) / 项目收入 * 100%',
           '销售提成': '服务提成 = 项目不含税收入 × 服务提成比例；商品提成来自商品销售',
-          '未回款金额': '项目总收入 - 已收款金额',
+          '未回款金额': '所有项目的应收金额总和 - 已收款金额总和（如果项目数据为空则无法计算）',
+          '客户未回款': '该客户的应收金额 - 该客户已收款金额',
         },
       };
 
