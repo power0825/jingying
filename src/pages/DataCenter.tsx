@@ -312,7 +312,7 @@ export default function DataCenter() {
       // 1. 项目数据（包含收入、成本、提成信息）
       const { data: allProjects, error: projectsError } = await supabase.from('projects').select(`
         id, code, name, customer_id, client_name, participants, execution_days,
-        income_with_tax, income_without_tax, estimated_cost,
+        income_with_tax, income_without_tax, reference_price_total,
         service_commission_rate, product_commission_rate,
         service_commission_paid, product_commission_paid,
         status, bd_manager_id, class_teacher_id, created_at
@@ -603,7 +603,7 @@ export default function DataCenter() {
         dataDictionary: {
           income_with_tax: '项目含税收入',
           income_without_tax: '项目不含税收入',
-          estimated_cost: '预估成本',
+          reference_price_total: '参考成本/报价总和',
           service_commission_rate: '服务提成比例 (%)',
           product_commission_rate: '商品提成比例 (%)',
           service_commission: '服务提成金额',
