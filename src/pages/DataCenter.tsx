@@ -308,13 +308,19 @@ export default function DataCenter() {
     try {
       // ============ 获取基础数据 ============
       // 1. 项目数据（包含收入、成本、提成信息）
-      const { data: allProjects } = await supabase.from('projects').select(`
+      const { data: allProjects, error: projectsError } = await supabase.from('projects').select(`
         id, code, name, customer_id, client_name, participants, execution_days,
         income_with_tax, income_without_tax, estimated_cost,
         service_commission_rate, product_commission_rate,
         service_commission_paid, product_commission_paid,
         status, bd_manager_id, class_teacher_id, created_at
       `);
+
+      if (projectsError) {
+        console.error('[AI Debug] 项目查询错误:', projectsError);
+      }
+      console.log('[AI Debug] 项目原始数据:', allProjects);
+      console.log('[AI Debug] 项目总数:', (allProjects || []).length);
 
       // 2. 项目执行数据（包含实际提成金额）
       const { data: projectExecutions } = await supabase
@@ -479,16 +485,6 @@ export default function DataCenter() {
         }
       });
 
-      // ============ 调试日志 ============
-      console.log('[AI Debug] 项目总数:', (allProjects || []).length);
-      console.log('[AI Debug] 项目原始数据:', JSON.stringify(allProjects?.slice(0, 3), null, 2));
-      console.log('[AI Debug] 有客户 ID 的项目数:', (allProjects || []).filter(p => p.customer_id).length);
-      console.log('[AI Debug] 有收入的项目数:', (allProjects || []).filter(p => Number(p.income_with_tax || 0) > 0).length);
-      console.log('[AI Debug] 有 bd_manager 的项目数:', (allProjects || []).filter(p => p.bd_manager_id).length);
-      console.log('[AI Debug] 销售统计结果:', salesStats);
-      console.log('[AI Debug] 客户统计结果:', customerStats);
-      console.log('[AI Debug] 员工列表:', users?.map(u => ({ id: u.id, name: u.name, role: u.role })));
-
       // 项目状态统计
       const statusStats: Record<string, number> = {};
       (allProjects || []).forEach(p => {
@@ -496,6 +492,18 @@ export default function DataCenter() {
       });
 
       // ============ 构建上下文数据 ============
+      // 计算回款数据
+      const customerReceivedMap = new Map();
+      (customerPayments || []).forEach(p => {
+        if (p.customer_id && p.payment_status === '已收款') {
+          const current = customerReceivedMap.get(p.customer_id) || 0;
+          customerReceivedMap.set(p.customer_id, current + Number(p.amount || 0));
+        }
+      });
+
+      const totalReceived = Array.from(customerReceivedMap.values()).reduce((sum, val) => sum + val, 0);
+      const totalUnreceived = (allProjects || []).reduce((sum, p) => sum + Number(p.income_with_tax || 0), 0) - totalReceived;
+
       const context = {
         // 总体摘要
         summary: {
@@ -504,6 +512,8 @@ export default function DataCenter() {
           totalSuppliers: (suppliers || []).length,
           totalEmployees: (users || []).length,
           totalRevenue: (allProjects || []).reduce((sum, p) => sum + Number(p.income_with_tax || 0), 0),
+          totalReceived: totalReceived,
+          totalUnreceived: totalUnreceived,
           totalCost: Object.values(supplierStats).reduce((sum, s) => sum + s.totalActual, 0),
           totalParticipants: (allProjects || []).reduce((sum, p) => sum + Number(p.participants || 0), 0),
           totalCommission: Object.values(commissionStats).reduce((sum, c) => sum + c.service + c.product, 0),
@@ -576,6 +586,7 @@ export default function DataCenter() {
           '供应商在某客户的成本占比': '供应商在该客户的成本 / 该客户所有供应商成本之和 * 100%',
           '项目利润率': '(项目收入 - 项目成本) / 项目收入 * 100%',
           '销售提成': '服务提成 = 项目不含税收入 × 服务提成比例；商品提成来自商品销售',
+          '未回款金额': '项目总收入 - 已收款金额',
         },
       };
 
