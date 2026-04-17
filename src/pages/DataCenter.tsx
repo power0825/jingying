@@ -531,18 +531,6 @@ export default function DataCenter() {
       const totalUnreceived = (allProjects || []).length > 0 ? Math.max(0, totalReceivable - totalReceived) : 0;
 
       // ============ 构建上下文数据 ============
-      // 计算回款数据
-      const customerReceivedMap = new Map();
-      (customerPayments || []).forEach(p => {
-        if (p.customer_id && p.payment_status === '已收款') {
-          const current = customerReceivedMap.get(p.customer_id) || 0;
-          customerReceivedMap.set(p.customer_id, current + Number(p.amount || 0));
-        }
-      });
-
-      const totalReceived = Array.from(customerReceivedMap.values()).reduce((sum, val) => sum + val, 0);
-      const totalUnreceived = (allProjects || []).reduce((sum, p) => sum + Number(p.income_with_tax || 0), 0) - totalReceived;
-
       const context = {
         // 总体摘要
         summary: {
