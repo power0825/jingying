@@ -356,16 +356,6 @@ export default function DataCenter() {
       console.log('[AI Debug] 回款数据:', customerPayments);
       console.log('[AI Debug] 项目关联客户情况:', (allProjects || []).filter(p => p.customer_id).length);
 
-      // 7. 供应商付款明细
-      const { data: supplierPayments } = await supabase
-        .from('project_financial_suppliers')
-        .select('project_id, supplier_id, amount, actual_amount, payment_status');
-
-      // 8. 报销数据
-      const { data: reimbursements } = await supabase
-        .from('project_reimbursements')
-        .select('project_id, category, amount, status');
-
       // ============ 构建映射 ============
       // 构建客户映射
       const customerMap = new Map();
