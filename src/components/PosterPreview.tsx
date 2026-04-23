@@ -231,7 +231,7 @@ export default function PosterPreview({ posterData, onClose }: PosterPreviewProp
             {/* ═══════ 1. 顶部 Header ═══════ */}
             <div
               style={{
-                background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 40%, #a855f7 100%)',
+                background: '#6366f1',
                 padding: '44px 32px 36px',
                 position: 'relative',
                 overflow: 'hidden',
@@ -374,7 +374,7 @@ export default function PosterPreview({ posterData, onClose }: PosterPreviewProp
                         width: 42,
                         height: 42,
                         borderRadius: 12,
-                        background: `linear-gradient(135deg, ${gradient.start}, ${gradient.end})`,
+                        background: `${gradient.start}`,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -480,7 +480,7 @@ export default function PosterPreview({ posterData, onClose }: PosterPreviewProp
             {(hotelInfo || restaurants.length > 0) && (
               <div style={{
                 padding: '20px 28px',
-                background: 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)',
+                background: '#f1f5f9',
                 borderTop: '2px solid #e2e8f0',
               }}>
                 <div style={{
