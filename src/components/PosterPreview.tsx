@@ -89,7 +89,7 @@ function PosterImageLarge({ src, alt, gradient, icon }: { src?: string; alt: str
   return (
     <div style={{
       width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: `linear-gradient(135deg, ${gradient.start}15, ${gradient.end}15)`,
+      background: '#f1f5f9',
     }}>
       <span style={{ fontSize: 40 }}>{icon}</span>
     </div>
@@ -238,9 +238,9 @@ export default function PosterPreview({ posterData, onClose }: PosterPreviewProp
               }}
             >
               {/* 装饰圆 */}
-              <div style={{ position: 'absolute', top: -30, right: -30, width: 160, height: 160, borderRadius: '50%', background: 'rgba(255,255,255,0.07)' }} />
-              <div style={{ position: 'absolute', bottom: -50, left: -20, width: 120, height: 120, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
-              <div style={{ position: 'absolute', top: 40, right: 80, width: 60, height: 60, borderRadius: '50%', background: 'rgba(255,255,255,0.08)' }} />
+              <div style={{ position: 'absolute', top: 10, right: 10, width: 120, height: 120, borderRadius: '50%', background: 'rgba(255,255,255,0.07)' }} />
+              <div style={{ position: 'absolute', bottom: 10, left: 10, width: 80, height: 80, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
+              <div style={{ position: 'absolute', top: 30, right: 60, width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,255,255,0.08)' }} />
 
               {/* 品牌标签 */}
               <div style={{ marginBottom: 16 }}>
@@ -386,7 +386,7 @@ export default function PosterPreview({ posterData, onClose }: PosterPreviewProp
                       }}>
                         D{dayData.day}
                       </div>
-                      <div style={{ flex: 1, height: 1, minHeight: 1, minWidth: 20, background: `linear-gradient(90deg, ${gradient.start}50, transparent)` }} />
+                      <div style={{ flex: 1, height: 1, minHeight: 1, minWidth: 20, background: `${gradient.start}50` }} />
                     </div>
 
                     {/* 活动卡片 */}
