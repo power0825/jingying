@@ -671,6 +671,7 @@ export default function Quotations() {
       const posterCopy = await generatePosterCopy(
         schedule,
         allSuppliers || suppliers,
+        hotelArrangement,
         data.projectName,
         data.clientName,
         data.participants,
