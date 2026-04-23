@@ -402,13 +402,12 @@ export default function PosterPreview({ posterData, onClose }: PosterPreviewProp
                           background: '#fff',
                           borderRadius: 14,
                           border: '1px solid #f1f5f9',
-                          overflow: 'hidden',
                           boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
                         }}>
                           {/* 左侧图片 */}
                           <div style={{
                             width: 130,
-                            height: 140,
+                            height: 150,
                             flexShrink: 0,
                             position: 'relative',
                             background: '#f8fafc',
