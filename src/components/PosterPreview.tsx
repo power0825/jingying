@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { Loader2, Download, X, Image as ImageIcon } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import type { PosterData } from '../lib/poster';
@@ -29,9 +29,27 @@ const ACTIVITY_ICONS: Record<string, string> = {
 };
 const defaultIcon = '📍';
 
-// 通用图片渲染组件（inline style，避免 CSS 类名问题）
+// ─── 带跨域支持和错误回退的图片组件 ───
 function PosterImage({ src, alt, size, rounded }: { src?: string; alt: string; size: number; rounded?: boolean }) {
   const [error, setError] = useState(false);
+  if (!src || error) {
+    return (
+      <div
+        style={{
+          width: size,
+          height: size,
+          borderRadius: rounded ? 8 : 0,
+          background: '#f1f5f9',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+        }}
+      >
+        <ImageIcon style={{ width: size * 0.35, height: size * 0.35, color: '#cbd5e1' }} />
+      </div>
+    );
+  }
   return (
     <div
       style={{
@@ -39,66 +57,107 @@ function PosterImage({ src, alt, size, rounded }: { src?: string; alt: string; s
         height: size,
         borderRadius: rounded ? 8 : 0,
         overflow: 'hidden',
-        background: '#f1f5f9',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
         flexShrink: 0,
         position: 'relative',
       }}
     >
-      {src && !error ? (
-        <img
-          src={src}
-          alt={alt}
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-          }}
-          onError={() => setError(true)}
-        />
-      ) : (
-        <ImageIcon style={{ width: size * 0.4, height: size * 0.4, color: '#cbd5e1' }} />
-      )}
+      <img
+        src={src}
+        alt={alt}
+        crossOrigin="anonymous"
+        style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', top: 0, left: 0 }}
+        onError={() => setError(true)}
+      />
     </div>
   );
+}
+
+// ─── 大图组件（活动卡片用） ───
+function PosterImageLarge({ src, alt, gradient, icon }: { src?: string; alt: string; gradient: { start: string; end: string }; icon: string }) {
+  const [error, setError] = useState(false);
+  if (src && !error) {
+    return (
+      <img
+        src={src}
+        alt={alt}
+        crossOrigin="anonymous"
+        style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', top: 0, left: 0 }}
+        onError={() => setError(true)}
+      />
+    );
+  }
+  return (
+    <div style={{
+      width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: `linear-gradient(135deg, ${gradient.start}15, ${gradient.end}15)`,
+    }}>
+      <span style={{ fontSize: 40 }}>{icon}</span>
+    </div>
+  );
+}
+
+// ─── 等待所有图片加载完成 ───
+function waitForImages(container: HTMLElement): Promise<void> {
+  const images = container.querySelectorAll('img');
+  const promises = Array.from(images).map((img) => {
+    if (img.complete) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      img.onload = () => resolve();
+      img.onerror = () => resolve();
+    });
+  });
+  return Promise.all(promises).then(() => {});
 }
 
 export default function PosterPreview({ posterData, onClose }: PosterPreviewProps) {
   const posterRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState('');
 
   const handleDownload = useCallback(async () => {
     if (!posterRef.current) return;
     setExporting(true);
+    setExportProgress('准备中...');
 
     try {
+      // 先等所有图片加载
+      setExportProgress('正在加载图片...');
+      await waitForImages(posterRef.current);
+      // 额外给浏览器一点渲染时间
+      await new Promise((r) => setTimeout(r, 500));
+
+      setExportProgress('正在生成图片...');
       const canvas = await html2canvas(posterRef.current, {
         scale: 2,
         useCORS: true,
+        allowTaint: false,
         backgroundColor: '#f8fafc',
-        logging: false,
+        logging: true,
       });
 
-      canvas.toBlob((blob) => {
-        if (!blob) return;
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `营销海报-${posterData.projectName}.png`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }, 'image/png');
-    } catch (error) {
+      setExportProgress('正在下载...');
+      const blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob(resolve, 'image/png', 1.0);
+      });
+
+      if (!blob) {
+        throw new Error('图片生成失败（Canvas 导出为空），请检查图片链接是否可访问');
+      }
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `营销海报-${posterData.projectName}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error: any) {
       console.error('海报导出失败:', error);
+      alert(`海报导出失败：${error.message || '未知错误'}\n\n可能原因：\n1. 图片链接不可访问或存在跨域限制\n2. 请尝试将图片上传到 Supabase Storage 并设置公开访问`);
     } finally {
       setExporting(false);
+      setExportProgress('');
     }
   }, [posterData.projectName]);
 
@@ -135,7 +194,7 @@ export default function PosterPreview({ posterData, onClose }: PosterPreviewProp
               className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
             >
               {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              {exporting ? '生成中...' : '下载海报'}
+              {exporting ? exportProgress || '生成中...' : '下载海报'}
             </button>
             <button
               onClick={onClose}
@@ -330,7 +389,6 @@ export default function PosterPreview({ posterData, onClose }: PosterPreviewProp
                           border: '1px solid #f1f5f9',
                           overflow: 'hidden',
                           boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-                          transition: 'box-shadow 0.2s',
                         }}>
                           {/* 左侧图片 */}
                           <div style={{
@@ -341,34 +399,7 @@ export default function PosterPreview({ posterData, onClose }: PosterPreviewProp
                             background: '#f8fafc',
                             overflow: 'hidden',
                           }}>
-                            {activity.imageUrl ? (
-                              <img
-                                src={activity.imageUrl}
-                                alt={activity.name}
-                                style={{
-                                  width: '100%',
-                                  height: '100%',
-                                  objectFit: 'cover',
-                                  position: 'absolute',
-                                  top: 0,
-                                  left: 0,
-                                }}
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).style.display = 'none';
-                                }}
-                              />
-                            ) : (
-                              <div style={{
-                                width: '100%',
-                                height: '100%',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                background: `linear-gradient(135deg, ${gradient.start}15, ${gradient.end}15)`,
-                              }}>
-                                <span style={{ fontSize: 40 }}>{icon}</span>
-                              </div>
-                            )}
+                            <PosterImageLarge src={activity.imageUrl} alt={activity.name} gradient={gradient} icon={icon} />
                             {/* AM/PM 标签 */}
                             <div style={{
                               position: 'absolute',
@@ -414,7 +445,7 @@ export default function PosterPreview({ posterData, onClose }: PosterPreviewProp
                                 {activity.name}
                               </span>
                             </div>
-                            {/* 描述 - 类似 PDF 风格的介绍 */}
+                            {/* 描述 */}
                             <p style={{
                               fontSize: 12,
                               color: '#64748b',

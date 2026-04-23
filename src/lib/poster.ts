@@ -5,10 +5,10 @@ import { DashScope } from './qwen';
 
 export interface PosterActivity {
   name: string;
-  description: string; // AI 生成的行程描述，50-100字，类似 PDF 风格的正式介绍
+  description: string;
   imageUrl?: string;
   type: 'visit' | 'teach';
-  timeLabel: string; // 'AM' / 'PM'
+  timeLabel: string;
 }
 
 export interface PosterDayData {
@@ -30,13 +30,29 @@ export interface PosterData {
   participants: number;
   days: number;
   slogan: string;
-  highlights: string[]; // AI 生成的行程亮点（3-4 条）
+  highlights: string[];
   daysData: PosterDayData[];
   hotelInfo?: PosterServiceInfo;
   restaurants: PosterServiceInfo[];
 }
 
-// 用 AI 生成海报全部文案
+// ─── 供应商查找工具（支持模糊匹配） ───
+function findSupplierByName(suppliers: any[], name: string): any {
+  // 精确匹配
+  let result = suppliers.find((s) => s.name === name);
+  if (result) return result;
+
+  // 去除空格后匹配
+  const trimmed = name.replace(/\s/g, '');
+  result = suppliers.find((s) => s.name.replace(/\s/g, '') === trimmed);
+  if (result) return result;
+
+  // 包含匹配（AI 可能在名称前后加了文字）
+  result = suppliers.find((s) => name.includes(s.name) || s.name.includes(name));
+  return result;
+}
+
+// ─── AI 文案生成 ───
 export async function generatePosterCopy(
   schedule: any[],
   suppliers: any[],
@@ -47,12 +63,6 @@ export async function generatePosterCopy(
   days: number
 ): Promise<PosterData> {
   const ai = new DashScope();
-
-  // 构建行程文本（含所有供应商详情）
-  const hotelSupplier = suppliers.find((s: any) => s.id === hotelArrangement?.hotelId);
-  const hotelContext = hotelSupplier
-    ? `酒店：${hotelSupplier.name}（${hotelArrangement.nights}晚，每间${hotelArrangement.peoplePerRoom}人）`
-    : '酒店：未指定';
 
   // 收集所有餐厅
   const restaurantSet = new Set<string>();
@@ -65,50 +75,50 @@ export async function generatePosterCopy(
       }
     });
   });
-  const restaurantContext = restaurantIds
-    .map((id) => {
-      const r = suppliers.find((s: any) => s.id === id);
-      return r?.name || '未指定';
-    })
-    .join('、') || '未安排';
 
-  // 构建每日详细行程
+  const hotelSupplier = suppliers.find((s: any) => s.id === hotelArrangement?.hotelId);
+  const hotelContext = hotelSupplier
+    ? `酒店：${hotelSupplier.name}（${hotelArrangement.nights}晚，每间${hotelArrangement.peoplePerRoom}人）`
+    : '酒店：未指定';
+
+  const restaurantNames = restaurantIds
+    .map((id) => suppliers.find((s: any) => s.id === id)?.name || '未指定')
+    .join('、');
+
+  // 构建每日行程
   const scheduleDetail = schedule.map((day: any) => {
     const morningActs = (day.morning || []).map((act: any) => {
       const supplier = suppliers.find((s: any) => s.id === act.supplierId);
       const name = supplier?.name || '未指定';
-      if (act.type === 'visit') {
-        return `参访：${name}`;
-      }
+      if (act.type === 'visit') return `参访：${name}`;
       return `课程：${name} - ${act.courseName || '未指定'}（${act.hours || 0}课时）`;
     }).join('；') || '休息';
 
     const afternoonActs = (day.afternoon || []).map((act: any) => {
       const supplier = suppliers.find((s: any) => s.id === act.supplierId);
       const name = supplier?.name || '未指定';
-      if (act.type === 'visit') {
-        return `参访：${name}`;
-      }
+      if (act.type === 'visit') return `参访：${name}`;
       return `课程：${name} - ${act.courseName || '未指定'}（${act.hours || 0}课时）`;
     }).join('；') || '休息';
 
     return `第${day.day}天\n  上午：${morningActs}\n  下午：${afternoonActs}`;
   }).join('\n\n');
 
-  // 所有参访点 + 课程（用于 AI 生成亮点和描述）
-  const allActivities: { name: string; type: string; description?: string; image_url?: string }[] = [];
-  schedule.forEach((day: any) => {
-    [...day.morning, ...day.afternoon].forEach((act: any) => {
-      const supplier = suppliers.find((s: any) => s.id === act.supplierId);
-      if (supplier) {
-        allActivities.push({
-          name: supplier.name,
-          type: act.type,
-          image_url: supplier.image_url,
-        });
-      }
+  // 列出所有需要 AI 描述的供应商名称（帮助 AI 准确使用名称）
+  const activitySupplierNames = (() => {
+    const names: string[] = [];
+    const seen = new Set<string>();
+    schedule.forEach((day: any) => {
+      [...day.morning, ...day.afternoon].forEach((act: any) => {
+        const supplier = suppliers.find((s: any) => s.id === act.supplierId);
+        if (supplier && !seen.has(supplier.name)) {
+          seen.add(supplier.name);
+          names.push(supplier.name);
+        }
+      });
     });
-  });
+    return names.length > 0 ? `行程中涉及的供应商名称（请严格使用以下名称，不要修改）：${names.join('、')}` : '';
+  })();
 
   const prompt = `你是一个专业的游学/培训项目营销文案策划师。根据以下行程信息，为营销海报生成文案。
 
@@ -118,10 +128,12 @@ export async function generatePosterCopy(
 天数：${days}天
 
 酒店安排：${hotelContext}
-餐饮安排：${restaurantContext}
+餐饮安排：${restaurantNames || '未安排'}
 
 详细行程：
 ${scheduleDetail}
+
+${activitySupplierNames}
 
 请严格按以下JSON格式输出（不要包含markdown代码块标记）：
 {
@@ -137,8 +149,8 @@ ${scheduleDetail}
       "day": 1,
       "morning": [
         {
-          "name": "供应商名称",
-          "description": "50-100字的正式行程描述，类似旅游方案介绍。要介绍这个地方/课程的特色、亮点和参访价值，语言生动专业有吸引力"
+          "name": "供应商名称（必须严格使用上面列出的名称）",
+          "description": "50-100字的正式行程描述，像旅游方案一样介绍这个参访点/课程的特色、亮点和价值"
         }
       ],
       "afternoon": [
@@ -151,30 +163,24 @@ ${scheduleDetail}
   ],
   "hotelDescription": "20-40字的酒店介绍，突出舒适度和特色",
   "restaurantDescriptions": [
-    {"name": "餐厅名称", "description": "15-30字的餐厅介绍"}
+    {"name": "餐厅名称（必须严格使用上面列出的名称）", "description": "15-30字的餐厅介绍"}
   ]
 }
 
 要求：
-1. slogan 要有冲击力和吸引力，适合做海报主标语
-2. highlights 概括整个行程的核心亮点（如知名企业参访、专业课程、文化体验等），每条不超过30字
-3. 每个活动的 description 写50-100字，像 PDF 方案那样正式介绍这个行程点的特色和价值
-4. name 字段必须和行程中的供应商名称完全一致
-5. 每天都要有 morning 和 afternoon，即使当天没安排也要保留空数组
-6. restaurantDescriptions 中的 name 必须和上面列出的餐厅名称一致`;
+1. slogan 要有冲击力，适合做海报主标语
+2. highlights 概括整个行程的核心亮点，每条不超过30字
+3. 每个活动的 description 写50-100字，正式介绍这个行程点的特色和价值
+4. name 字段必须严格使用上面列出的供应商名称，不要添加或删除文字
+5. 每天都要有 morning 和 afternoon，即使没有安排也保留空数组
+6. restaurantDescriptions 中的 name 必须和上面列出的餐厅名称完全一致`;
 
   try {
     const response = await ai.call({
       model: 'qwen-plus',
       messages: [
-        {
-          role: 'system',
-          content: '你是专业的营销文案策划师。请直接输出JSON，不要输出其他内容。',
-        },
-        {
-          role: 'user',
-          content: prompt,
-        },
+        { role: 'system', content: '你是专业的营销文案策划师。请直接输出JSON，不要输出其他内容。' },
+        { role: 'user', content: prompt },
       ],
     });
 
@@ -190,12 +196,13 @@ ${scheduleDetail}
       parsed = generateFallbackCopy(schedule, suppliers, projectName, clientName, hotelArrangement, hotelSupplier);
     }
 
-    // 构建海报数据 - 每日行程
+    // 构建海报数据
     const daysData: PosterDayData[] = (parsed.days || []).map((dayData: any) => {
       const scheduleDay = schedule.find((s: any) => s.day === dayData.day);
-      const morning: PosterActivity[] = (dayData.morning || []).map((a: any, i: number) => {
+      const morning = (dayData.morning || []).map((a: any, i: number) => {
         const scheduleMorning = scheduleDay?.morning?.[i];
-        const supplier = suppliers.find((s: any) => s.name === a.name);
+        const supplier = findSupplierByName(suppliers, a.name);
+        console.log('[Poster] 查找供应商:', a.name, '→', supplier?.name || '(未找到)', supplier?.image_url ? '(有图片)' : '(无图片)');
         return {
           name: a.name,
           description: a.description,
@@ -204,9 +211,10 @@ ${scheduleDetail}
           timeLabel: 'AM',
         };
       });
-      const afternoon: PosterActivity[] = (dayData.afternoon || []).map((a: any, i: number) => {
+      const afternoon = (dayData.afternoon || []).map((a: any, i: number) => {
         const scheduleAfternoon = scheduleDay?.afternoon?.[i];
-        const supplier = suppliers.find((s: any) => s.name === a.name);
+        const supplier = findSupplierByName(suppliers, a.name);
+        console.log('[Poster] 查找供应商:', a.name, '→', supplier?.name || '(未找到)', supplier?.image_url ? '(有图片)' : '(无图片)');
         return {
           name: a.name,
           description: a.description,
@@ -218,7 +226,6 @@ ${scheduleDetail}
       return { day: dayData.day, morning, afternoon };
     });
 
-    // 酒店信息
     const hotelInfo: PosterServiceInfo | undefined = hotelSupplier
       ? {
           name: hotelSupplier.name,
@@ -228,9 +235,8 @@ ${scheduleDetail}
         }
       : undefined;
 
-    // 餐厅信息
     const restaurants: PosterServiceInfo[] = (parsed.restaurantDescriptions || []).map((r: any) => {
-      const supplier = suppliers.find((s: any) => s.name === r.name);
+      const supplier = findSupplierByName(suppliers, r.name);
       return {
         name: r.name,
         type: 'restaurant',
@@ -267,7 +273,7 @@ ${scheduleDetail}
   }
 }
 
-// 降级方案
+// ─── 降级方案 ───
 function generateFallbackCopy(
   schedule: any[],
   suppliers: any[],
@@ -277,7 +283,7 @@ function generateFallbackCopy(
   hotelSupplier: any
 ) {
   const days = schedule.map((day: any) => {
-    const morning = (day.morning || []).map((act: any, i: number) => {
+    const morning = (day.morning || []).map((act: any) => {
       const supplier = suppliers.find((s: any) => s.id === act.supplierId);
       return {
         name: supplier?.name || '参访点',
@@ -312,7 +318,7 @@ function generateFallbackCopy(
           restaurants.push({
             name: r.name,
             type: 'restaurant',
-            description: `精选当地特色餐饮，品味地道风味。`,
+            description: '精选当地特色餐饮，品味地道风味。',
             imageUrl: r.image_url,
           });
         }
