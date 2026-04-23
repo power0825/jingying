@@ -120,23 +120,34 @@ export default function PosterPreview({ posterData, onClose }: PosterPreviewProp
     setExportProgress('准备中...');
 
     try {
+      const el = posterRef.current;
+
       // 1) 先等所有图片加载
       setExportProgress('正在加载图片...');
-      await waitForImages(posterRef.current);
+      await waitForImages(el);
 
       // 2) 给浏览器时间完成渲染布局
       await new Promise((r) => setTimeout(r, 800));
 
-      // 3) 执行 html2canvas（去掉 allowTaint 避免冲突）
+      // 3) 验证容器尺寸
+      const rect = el.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) {
+        throw new Error(`海报容器尺寸为 0×0，请刷新页面后重试`);
+      }
+      console.log('[Poster] 容器尺寸:', rect.width, 'x', rect.height);
+
+      // 4) 执行 html2canvas
       setExportProgress('正在生成图片...');
-      const canvas = await html2canvas(posterRef.current, {
+      const canvas = await html2canvas(el, {
         scale: 2,
         useCORS: true,
         backgroundColor: '#f8fafc',
         logging: false,
       });
 
-      // 4) 导出 PNG
+      console.log('[Poster] Canvas 尺寸:', canvas.width, 'x', canvas.height);
+
+      // 5) 导出 PNG
       setExportProgress('正在下载...');
       const blob = await new Promise<Blob | null>((resolve) => {
         canvas.toBlob(resolve, 'image/png', 1.0);
