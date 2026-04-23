@@ -226,6 +226,8 @@ export default function PosterPreview({ posterData, onClose }: PosterPreviewProp
               width: 560,
               minHeight: 1080,
               fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+              WebkitFontSmoothing: 'antialiased',
+              MozOsxFontSmoothing: 'grayscale',
             }}
           >
             {/* ═══════ 1. 顶部 Header ═══════ */}
@@ -406,7 +408,7 @@ export default function PosterPreview({ posterData, onClose }: PosterPreviewProp
                           {/* 左侧图片 */}
                           <div style={{
                             width: 130,
-                            height: 130,
+                            height: 140,
                             flexShrink: 0,
                             position: 'relative',
                             background: '#f8fafc',
@@ -433,7 +435,7 @@ export default function PosterPreview({ posterData, onClose }: PosterPreviewProp
                           {/* 右侧文字 */}
                           <div style={{
                             flex: 1,
-                            padding: '12px 14px 12px 0',
+                            padding: '14px 16px 14px 0',
                             display: 'flex',
                             flexDirection: 'column',
                             justifyContent: 'center',
@@ -444,7 +446,7 @@ export default function PosterPreview({ posterData, onClose }: PosterPreviewProp
                               display: 'flex',
                               alignItems: 'center',
                               gap: 6,
-                              marginBottom: 8,
+                              marginBottom: 10,
                             }}>
                               <span style={{ fontSize: 16 }}>{icon}</span>
                               <span style={{
@@ -460,10 +462,11 @@ export default function PosterPreview({ posterData, onClose }: PosterPreviewProp
                             </div>
                             {/* 描述 */}
                             <p style={{
-                              fontSize: 12,
+                              fontSize: 13,
                               color: '#64748b',
                               margin: 0,
-                              lineHeight: 1.7,
+                              lineHeight: 1.8,
+                              letterSpacing: '0.3px',
                             }}>
                               {activity.description}
                             </p>
@@ -503,10 +506,10 @@ export default function PosterPreview({ posterData, onClose }: PosterPreviewProp
                       gap: 12,
                       background: '#fff',
                       borderRadius: 12,
-                      padding: 12,
+                      padding: 14,
                       border: '1px solid #e2e8f0',
                     }}>
-                      <PosterImage src={hotelInfo.imageUrl} alt={hotelInfo.name} size={56} rounded />
+                      <PosterImage src={hotelInfo.imageUrl} alt={hotelInfo.name} size={64} rounded />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{
                           display: 'flex',
@@ -534,10 +537,10 @@ export default function PosterPreview({ posterData, onClose }: PosterPreviewProp
                           </span>
                         </div>
                         <p style={{
-                          fontSize: 12,
+                          fontSize: 13,
                           color: '#64748b',
                           margin: 0,
-                          lineHeight: 1.5,
+                          lineHeight: 1.6,
                         }}>
                           {hotelInfo.description}
                         </p>
@@ -584,10 +587,10 @@ export default function PosterPreview({ posterData, onClose }: PosterPreviewProp
                           </span>
                         </div>
                         <p style={{
-                          fontSize: 12,
+                          fontSize: 13,
                           color: '#64748b',
                           margin: 0,
-                          lineHeight: 1.5,
+                          lineHeight: 1.6,
                         }}>
                           {r.description}
                         </p>
