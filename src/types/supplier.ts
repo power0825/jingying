@@ -32,6 +32,7 @@ export interface Supplier {
   settlement_day?: number;  // 结算日期（每月几号，月结方式下有效）
 
   remarks?: string; // 备注
+  image_url?: string; // 供应商图片URL，用于海报生成等场景
   extended_data: {
     // 酒店
     star_rating?: string; // 星级

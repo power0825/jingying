@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { X } from 'lucide-react';
+import { X, ImageIcon, Upload, Trash2 } from 'lucide-react';
 import { Supplier, SupplierType } from '../types/supplier';
 import { supabase } from '../lib/supabase';
 
@@ -30,6 +30,7 @@ const supplierSchema = z.object({
   bank_account: z.string().optional(),
   address: z.string().optional(),
   remarks: z.string().optional(),
+  image_url: z.string().optional(),
   extended_data: z.record(z.string(), z.any()).optional(),
   settlement_method: z.enum(['月结', '先款后票', '先票后款'] as const).optional().default('月结'),
   settlement_day: z.coerce.number().optional(),
@@ -64,6 +65,7 @@ export default function SupplierForm({ isOpen, onClose, onSuccess, initialData, 
       contact_phone: '',
       internal_contact_id: '',
       address: '',
+      image_url: '',
       remarks: '',
       account_name: '',
       tax_id: '',
@@ -112,6 +114,7 @@ export default function SupplierForm({ isOpen, onClose, onSuccess, initialData, 
           contact_phone: '',
           internal_contact_id: '',
           address: '',
+          image_url: '',
           remarks: '',
           account_name: '',
           tax_id: '',
@@ -229,6 +232,43 @@ export default function SupplierForm({ isOpen, onClose, onSuccess, initialData, 
                 <div className="lg:col-span-3">
                   <label className="block text-sm font-medium text-slate-700 mb-1">地址</label>
                   <input {...register('address')} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
+                </div>
+                <div className="lg:col-span-3">
+                  <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-1">
+                    <ImageIcon className="w-4 h-4 text-slate-400" />
+                    图片 URL（用于海报生成）
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 relative">
+                      <input
+                        {...register('image_url')}
+                        placeholder="粘贴图片链接，如 https://xxx.supabase.co/storage/v1/object/public/supplier-images/xxx.jpg"
+                        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+                    {watch('image_url') && (
+                      <div className="relative flex-shrink-0">
+                        <img
+                          src={watch('image_url')}
+                          alt="预览"
+                          className="w-16 h-16 rounded-lg object-cover border border-slate-200"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setValue('image_url', '')}
+                          className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-slate-400">
+                    上传供应商图片到 Supabase Storage，然后粘贴公开链接到这里
+                  </p>
                 </div>
               </div>
             </div>
