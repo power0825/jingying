@@ -120,21 +120,23 @@ export default function PosterPreview({ posterData, onClose }: PosterPreviewProp
     setExportProgress('准备中...');
 
     try {
-      // 先等所有图片加载
+      // 1) 先等所有图片加载
       setExportProgress('正在加载图片...');
       await waitForImages(posterRef.current);
-      // 额外给浏览器一点渲染时间
-      await new Promise((r) => setTimeout(r, 500));
 
+      // 2) 给浏览器时间完成渲染布局
+      await new Promise((r) => setTimeout(r, 800));
+
+      // 3) 执行 html2canvas（去掉 allowTaint 避免冲突）
       setExportProgress('正在生成图片...');
       const canvas = await html2canvas(posterRef.current, {
         scale: 2,
         useCORS: true,
-        allowTaint: false,
         backgroundColor: '#f8fafc',
-        logging: true,
+        logging: false,
       });
 
+      // 4) 导出 PNG
       setExportProgress('正在下载...');
       const blob = await new Promise<Blob | null>((resolve) => {
         canvas.toBlob(resolve, 'image/png', 1.0);
@@ -373,7 +375,7 @@ export default function PosterPreview({ posterData, onClose }: PosterPreviewProp
                       }}>
                         D{dayData.day}
                       </div>
-                      <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${gradient.start}50, transparent)` }} />
+                      <div style={{ flex: 1, height: 1, minHeight: 1, minWidth: 20, background: `linear-gradient(90deg, ${gradient.start}50, transparent)` }} />
                     </div>
 
                     {/* 活动卡片 */}
