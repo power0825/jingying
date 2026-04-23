@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Calculator, Loader2, FileText, Save, Download, Edit3, Check, Plus, Trash2, History } from 'lucide-react';
+import { Sparkles, Calculator, Loader2, FileText, Save, Download, Edit3, Check, Plus, Trash2, History, Image as ImageIcon } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { supabase } from '../lib/supabase';
 import { DashScope, askDataAssistant } from '../lib/qwen';
+import { generatePosterCopy } from '../lib/poster';
+import PosterPreview from '../components/PosterPreview';
 import Markdown from 'react-markdown';
 import html2pdf from 'html2pdf.js';
 import { useAppStore } from '../store';
@@ -227,6 +229,11 @@ export default function Quotations() {
   const [manualError, setManualError] = useState<string | null>(null);
   const [isEditingProposal, setIsEditingProposal] = useState(false);
   const [editableProposal, setEditableProposal] = useState('');
+
+  // --- Poster State ---
+  const [isGeneratingPoster, setIsGeneratingPoster] = useState(false);
+  const [posterData, setPosterData] = useState<any>(null);
+  const [showPosterModal, setShowPosterModal] = useState(false);
 
   // --- Quotation Number Generation ---
   const generateQuotationNumber = () => {
@@ -642,6 +649,41 @@ export default function Quotations() {
     } else {
       console.error('Export element not found');
       alert('导出失败：找不到导出内容');
+    }
+  };
+
+  // --- 海报生成 ---
+  const handleGeneratePoster = async () => {
+    if (schedule.length === 0) {
+      alert('请先生成行程表');
+      return;
+    }
+
+    setIsGeneratingPoster(true);
+    try {
+      const data = getValues();
+
+      // 获取供应商数据（含 image_url）
+      const { data: allSuppliers } = await supabase
+        .from('suppliers')
+        .select('id, name, image_url');
+
+      const posterCopy = await generatePosterCopy(
+        schedule,
+        allSuppliers || suppliers,
+        data.projectName,
+        data.clientName,
+        data.participants,
+        data.days
+      );
+
+      setPosterData(posterCopy);
+      setShowPosterModal(true);
+    } catch (error: any) {
+      console.error('海报生成失败:', error);
+      alert('海报生成失败: ' + (error.message || '未知错误'));
+    } finally {
+      setIsGeneratingPoster(false);
     }
   };
 
@@ -1773,13 +1815,21 @@ export default function Quotations() {
                             >
                               <Download className="w-3 h-3 mr-1" /> PDF
                             </button>
-                            <button 
+                            <button
                               onClick={exportToWord}
                               className="px-2 py-1 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded hover:bg-slate-50 flex items-center"
                             >
                               <FileText className="w-3 h-3 mr-1" /> Word
                             </button>
-                            <button 
+                            <button
+                              onClick={handleGeneratePoster}
+                              disabled={isGeneratingPoster}
+                              className="px-2 py-1 text-xs font-medium text-white bg-gradient-to-r from-purple-600 to-pink-600 rounded hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                            >
+                              {isGeneratingPoster ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <ImageIcon className="w-3 h-3 mr-1" />}
+                              海报
+                            </button>
+                            <button
                               onClick={saveQuotation}
                               className="px-2 py-1 text-xs font-medium text-white bg-indigo-600 rounded hover:bg-indigo-700 flex items-center"
                             >
@@ -2021,6 +2071,14 @@ export default function Quotations() {
             )}
           </div>
         </div>
+      )}
+
+      {/* 海报预览弹窗 */}
+      {showPosterModal && posterData && (
+        <PosterPreview
+          posterData={posterData}
+          onClose={() => setShowPosterModal(false)}
+        />
       )}
     </div>
   );
